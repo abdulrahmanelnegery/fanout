@@ -1,0 +1,99 @@
+name: realtime-notifications
+
+x-api-env: &api-env
+  APP_ENV: local
+  APP_DEBUG: "true"
+  APP_KEY: base64:6qEq3uOogM1BzuZEUzX3z4asDmjH42BP1LSisw//Y2Q=
+  APP_URL: http://localhost:8000
+  DB_CONNECTION: mysql
+  DB_HOST: mysql
+  DB_PORT: "3306"
+  DB_DATABASE: realtime
+  DB_USERNAME: realtime
+  DB_PASSWORD: secret
+  QUEUE_CONNECTION: redis
+  CACHE_STORE: database
+  SESSION_DRIVER: database
+  REDIS_CLIENT: phpredis
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_PREFIX: ""
+  # Must be identical to the ws service secret below.
+  WS_TOKEN_SECRET: super-secret-demo-value-change-me
+  WS_TOKEN_TTL: "60"
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: realtime
+      MYSQL_USER: realtime
+      MYSQL_PASSWORD: secret
+      MYSQL_ROOT_PASSWORD: root
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+
+  api:
+    build: ./api
+    environment: *api-env
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # config:cache bakes the container environment into the config so it survives
+    # `artisan serve`, which only forwards an allow-list of env vars to its workers.
+    command: >
+      sh -c "php artisan migrate --force &&
+             php artisan config:cache &&
+             php artisan serve --host=0.0.0.0 --port=8000"
+
+  queue-worker:
+    build: ./api
+    environment: *api-env
+    depends_on:
+      api:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "php artisan config:cache &&
+             php artisan queue:work --tries=3 --backoff=5 --max-time=3600"
+
+  ws:
+    build: ./ws
+    environment:
+      WS_PORT: "8080"
+      REDIS_URL: redis://redis:6379
+      REDIS_CHANNEL: reservation-events
+      WS_TOKEN_SECRET: super-secret-demo-value-change-me
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  web:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./web:/usr/share/nginx/html:ro
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+      - ws
