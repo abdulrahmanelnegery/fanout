@@ -2,7 +2,7 @@
 
 Real-time event delivery: Laravel to Redis pub/sub to a Node.js WebSocket service to the browser.
 
-[![CI](https://github.com/abdulrahman-muhammed-07/fanout/actions/workflows/ci.yml/badge.svg)](https://github.com/abdulrahman-muhammed-07/fanout/actions/workflows/ci.yml)
+[![CI](https://github.com/abdulrahmanelnegery/fanout/actions/workflows/ci.yml/badge.svg)](https://github.com/abdulrahmanelnegery/fanout/actions/workflows/ci.yml)
 
 A small polyglot system that pushes domain events to the browser in real time.
 
