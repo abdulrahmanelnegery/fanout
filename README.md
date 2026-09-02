@@ -1,6 +1,8 @@
-# realtime-notifications
+# fanout
 
-[![CI](https://github.com/OWNER/realtime-notifications/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/realtime-notifications/actions/workflows/ci.yml)
+Real-time event delivery: Laravel to Redis pub/sub to a Node.js WebSocket service to the browser.
+
+[![CI](https://github.com/abdulrahman-muhammed-07/fanout/actions/workflows/ci.yml/badge.svg)](https://github.com/abdulrahman-muhammed-07/fanout/actions/workflows/ci.yml)
 
 A small polyglot system that pushes domain events to the browser in real time.
 

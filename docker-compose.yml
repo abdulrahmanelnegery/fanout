@@ -1,4 +1,4 @@
-name: realtime-notifications
+name: fanout
 
 x-api-env: &api-env
   APP_ENV: local

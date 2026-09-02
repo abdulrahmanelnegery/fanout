@@ -1,5 +1,5 @@
 {
-  "name": "realtime-notifications-ws",
+  "name": "fanout-ws",
   "version": "1.0.0",
   "description": "WebSocket fan-out server for reservation events published on Redis pub/sub",
   "type": "module",
