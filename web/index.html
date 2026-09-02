@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reservation Events (live)</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font: 15px/1.5 system-ui, sans-serif;
+      max-width: 640px;
+      margin: 40px auto;
+      padding: 0 16px;
+    }
+    h1 { font-size: 1.2rem; }
+    #status { font-weight: 600; }
+    #status[data-state="open"] { color: #1a7f37; }
+    #status[data-state="closed"], #status[data-state="error"] { color: #cf222e; }
+    button { font: inherit; padding: 6px 12px; cursor: pointer; }
+    ul { list-style: none; padding: 0; }
+    li {
+      border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin: 6px 0;
+      font-family: ui-monospace, monospace;
+      font-size: 13px;
+    }
+    li .type { font-weight: 700; }
+    time { opacity: 0.6; }
+  </style>
+</head>
+<body>
+  <h1>Reservation events, live over WebSocket</h1>
+  <p>Connection: <span id="status" data-state="connecting">connecting...</span></p>
+  <p>
+    <button id="emit" type="button">POST a reservation event</button>
+    <span id="emit-result"></span>
+  </p>
+  <ul id="events"></ul>
+
+  <script type="module">
+    const params = new URLSearchParams(location.search);
+    const API_BASE = params.get('api') ?? 'http://localhost:8000';
+    const WS_BASE = params.get('ws') ?? 'ws://localhost:8080';
+
+    const statusEl = document.getElementById('status');
+    const eventsEl = document.getElementById('events');
+    const emitBtn = document.getElementById('emit');
+    const emitResult = document.getElementById('emit-result');
+
+    function setStatus(state, text) {
+      statusEl.dataset.state = state;
+      statusEl.textContent = text;
+    }
+
+    function render(event) {
+      const li = document.createElement('li');
+      const when = new Date(event.at);
+      li.innerHTML =
+        `<span class="type">${event.type}</span> ` +
+        `${event.resource} ` +
+        `<span>tenant ${event.tenant_id}</span> ` +
+        `<time datetime="${event.at}">${when.toLocaleTimeString()}</time>`;
+      eventsEl.prepend(li);
+    }
+
+    async function fetchToken() {
+      const response = await fetch(`${API_BASE}/ws-token`);
+      if (!response.ok) {
+        throw new Error(`ws-token request failed: ${response.status}`);
+      }
+      const body = await response.json();
+      return body.token;
+    }
+
+    async function connect() {
+      let token;
+      try {
+        token = await fetchToken();
+      } catch (error) {
+        setStatus('error', `token error: ${error.message}`);
+        return;
+      }
+
+      const socket = new WebSocket(`${WS_BASE}/?token=${encodeURIComponent(token)}`);
+
+      socket.addEventListener('open', () => setStatus('open', 'open'));
+      socket.addEventListener('message', (message) => {
+        try {
+          render(JSON.parse(message.data));
+        } catch {
+          // Ignore frames that are not JSON reservation events.
+        }
+      });
+      socket.addEventListener('error', () => setStatus('error', 'socket error'));
+      socket.addEventListener('close', (event) => {
+        setStatus('closed', `closed (code ${event.code})`);
+        // 4001 means the token was rejected; anything else, retry after a short delay.
+        if (event.code !== 4001) {
+          setTimeout(connect, 2000);
+        }
+      });
+    }
+
+    emitBtn.addEventListener('click', async () => {
+      emitBtn.disabled = true;
+      emitResult.textContent = 'posting...';
+      try {
+        const response = await fetch(`${API_BASE}/events/reservation`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({
+            type: 'created',
+            resource: `reservations/${Math.floor(Math.random() * 1000)}`,
+            tenant_id: 1,
+          }),
+        });
+        emitResult.textContent = response.ok ? `queued (${response.status})` : `failed (${response.status})`;
+      } catch (error) {
+        emitResult.textContent = `failed: ${error.message}`;
+      } finally {
+        emitBtn.disabled = false;
+      }
+    });
+
+    connect();
+  </script>
+</body>
+</html>
